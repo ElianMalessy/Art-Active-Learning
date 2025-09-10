@@ -1,33 +1,36 @@
 import faiss
-import numpy as np
 import torch
-from models.models import NormalBayes
+from torch.utils.data import DataLoader
+
+from dataset.embeddings import EmbeddingDataset
+from models.encoder import Encoder
+from models import device
 
 
 def train():
     index = faiss.read_index("wikiart_index.faiss")
+    d = 64
+    latent_index = faiss.IndexFlatIP(d)
 
-    # if torch.cuda.is_available():
-        # res = faiss.StandardGpuResources()  # initialize GPU resources
-        # index = faiss.index_cpu_to_gpu(res, 0, index)
+    if torch.cuda.is_available():
+        res = faiss.StandardGpuResources()  # initialize GPU resources
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+        latent_index = faiss.index_cpu_to_gpu(res, 0, latent_index)
 
-    n, dim = index.ntotal, index.d
 
-    distribution = NormalBayes()
-    embeddings = index.reconstruct_n(0, n)
-    while True:
-        # max entropy
+    dataset = EmbeddingDataset("wikiart_embeddings")
+    batch_size = 512
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-        # p(y=1|x,mu,theta)
-        logp = distribution.log_likelihood(embeddings, y=1)
-        p = torch.exp(logp)
-        bernoulli_entropy = -p*logp - (1-p)*torch.log(1-p)
+    encoder = Encoder().to(device)
+    for embeddings, _ in dataloader:
+        embeddings = embeddings.to(device)
+        latents = encoder(embeddings)
 
-        x = torch.argmax(bernoulli_entropy)
-        y = input()
-        distribution.update(x, y)
+        # loss = ...
 
             
-            
+if __name__ == '__main__':
+    train()
 
 

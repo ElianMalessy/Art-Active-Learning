@@ -3,7 +3,6 @@ from models import device
 
 class NormalBayes():
     def __init__(self, input_dim=512, sigma=1):
-        super(NormalBayes, self).__init__()
         self.input_dim = input_dim
         self.sigma = sigma
         self.device = device
@@ -38,7 +37,7 @@ class NormalBayes():
         return (self.counts[y] + 1.0) / (total + len(self.classes))
 
     # p(y=1|x) = p(x|y=1)p(y=1)/(p(x|y=1)p(y=1) + p(x|y=0)p(y=0))
-    def log_probability(self, x, y):
+    def log_likelihood(self, x, y):
         log_pxy = {}
         for c in self.classes:
             log_pxy[c] = self.dist[c].log_prob(x) + torch.log(torch.tensor(self.class_prior(c), device=self.device))

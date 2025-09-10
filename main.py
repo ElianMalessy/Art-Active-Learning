@@ -1,9 +1,11 @@
-from dataset import WikiArtDataset
+from torch.utils.data import DataLoader
 from torchvision import transforms
-from setup import store_embeddings
 from datasets import load_dataset
-from train import train
 import argparse
+
+from dataset.wikiart import WikiArtDataset
+from setup import store_embeddings
+from train import train
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--clear', action='store_true')
