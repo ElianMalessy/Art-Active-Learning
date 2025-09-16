@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art Tinder</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1>🎨 Art Tinder</h1>
+            <div class="stats" id="stats">
+                <span id="likes-count">0</span> ❤️ |
+                <span id="dislikes-count">0</span> ❌ |
+                <span id="remaining-count">0</span> remaining
+            </div>
+        </header>
+
+        <div class="card-container" id="card-container">
+            <div class="card" id="main-card">
+                <div class="card-content">
+                    <div class="image-container" id="image-container">
+                        <div class="loading" id="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading next image...</p>
+                        </div>
+                        <img id="card-image" style="display: none;" alt="Artwork">
+                    </div>
+                    <div class="card-info">
+                        <h3 id="card-prompt">Prompt will appear here</h3>
+                    </div>
+                </div>
+
+                <div class="swipe-indicator like-indicator" id="like-indicator">
+                    <i class="fas fa-heart"></i>
+                    <span>LIKE</span>
+                </div>
+                <div class="swipe-indicator dislike-indicator" id="dislike-indicator">
+                    <i class="fas fa-times"></i>
+                    <span>NOPE</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="action-btn dislike-btn" id="dislike-btn">
+                <i class="fas fa-times"></i>
+            </button>
+            <button class="action-btn like-btn" id="like-btn">
+                <i class="fas fa-heart"></i>
+            </button>
+        </div>
+
+        <div class="instructions">
+            <p><strong>Swipe right or click ❤️ to like</strong></p>
+            <p><strong>Swipe left or click ❌ to dislike</strong></p>
+            <p><em>Session starts automatically when you load the page</em></p>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
