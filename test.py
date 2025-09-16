@@ -1,4 +1,3 @@
-import faiss
 import torch
 from torch.utils.data import DataLoader
 import subprocess
@@ -8,6 +7,7 @@ from torchvision.utils import save_image
 
 from models.bayes import NormalBayes
 from dataset.embeddings import EmbeddingDataset
+from utils import device
 
 def render_image_w3m(image_tensor):
     """Render image tensor using w3m"""
@@ -31,7 +31,8 @@ def test():
 
     distribution = NormalBayes()
 
-    while True:
+    mask = torch.ones(len(dataset), dtype=torch.bool).to(device)
+    while mask.any():
         # max entropy sampling
         # p(y=1|x,mu,theta)
 
@@ -41,19 +42,29 @@ def test():
         
         # Each batch is (embeddings, metadata). We only need the embeddings tensor.
         for latents, _ in dataloader:
-            latents = latents.to(distribution.device)
-            logp = distribution.log_likelihood(latents, y=1)
-            # Numerical stability: clamp probabilities away from 0/1
+            latents = latents.to(device)
+            global_idxs = torch.nonzero(mask, as_tuple=False).squeeze(-1)
+            candidates = latents[global_idxs]
+
+            logp = distribution.log_likelihood(candidates, y=1)
             p = torch.exp(logp).clamp(1e-6, 1 - 1e-6)
             bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
-            print('entropy:', bernoulli_entropy.sum().item())
 
-            x = torch.argmax(bernoulli_entropy).item()
-            print('argmax:', x)
+            print('min entropy:', bernoulli_entropy.min().item())
+            print('max entropy:', bernoulli_entropy.max().item())
+            print('sum entropy:', bernoulli_entropy.sum().item())
+
+            x_local = int(torch.argmax(bernoulli_entropy).item())
+            x_global = int(global_idxs[x_local].item())
+
+            ties = (bernoulli_entropy == bernoulli_entropy.max().item()).nonzero(as_tuple=True)[0]
             
-            # Get the original image tensor for the selected index
-            image_tensor = dataset.get_image(x)
-            prompt = dataset.get_prompt(x)
+            print("argmax:", x_global)
+            print("ties:", ties.tolist())
+            mask[x_global] = False
+
+            image_tensor = dataset.get_image(x_global)
+            prompt = dataset.get_prompt(x_global)
             
             print(f"Prompt: {prompt}")
             render_image_w3m(image_tensor)
@@ -68,7 +79,7 @@ def test():
             y = int(y)
 
             # Update distribution with the latent embedding (not the image)
-            latent_embedding = latents[x]
+            latent_embedding = latents[x_local]
             distribution.update(latent_embedding, y)
 
             
