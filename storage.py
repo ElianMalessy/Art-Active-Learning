@@ -4,7 +4,6 @@ from utils import device
 import os
 import numpy as np
 import pickle
-import gc
 
 
 def store_clip_embeddings(dataloader, save_dir):
@@ -41,9 +40,6 @@ def store_clip_embeddings(dataloader, save_dir):
         
         if (idx + 1) % 10 == 0:
             print(f'Processed {(idx + 1) * 128} images')
-            # Clear cache periodically to prevent memory buildup
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None
-            gc.collect()
 
     all_embeddings = torch.cat(all_embeddings, dim=0).numpy().astype('float32')
     np.save(os.path.join(save_dir, 'embeddings.npy'), all_embeddings, allow_pickle=False)
