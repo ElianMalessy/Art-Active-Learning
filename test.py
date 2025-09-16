@@ -44,10 +44,8 @@ def test():
             latents = latents.to(distribution.device)
             logp = distribution.log_likelihood(latents, y=1)
             # Numerical stability: clamp probabilities away from 0/1
-            p = torch.exp(logp)
-            p = torch.clamp(p, 1e-6, 1 - 1e-6)
+            p = torch.exp(logp).clamp(1e-6, 1 - 1e-6)
             bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
-            bernoulli_entropy = torch.nan_to_num(bernoulli_entropy, nan=0.0, posinf=0.0, neginf=0.0)
             print('entropy:', bernoulli_entropy.sum().item())
 
             x = torch.argmax(bernoulli_entropy).item()
