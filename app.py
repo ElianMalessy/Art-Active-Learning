@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 import torch
 from torchvision.utils import save_image
+from torch.utils.data import DataLoader
 
 import tempfile
 import base64
@@ -31,7 +32,7 @@ mask = None
 current_session = None
 
 class FeedbackRequest(BaseModel):
-    image_id: int
+    image_idx: int
     rating: int  # 0 for dislike, 1 for like
 
 class SessionData:
@@ -39,7 +40,7 @@ class SessionData:
         self.dataset = EmbeddingDataset('latent_embeddings', return_metadata=True)
         self.distribution = NormalBayes()
         self.mask = torch.ones(len(self.dataset), dtype=torch.bool).to(device)
-        self.current_image_id: Optional[int] = None
+        self.current_image_idx: Optional[int] = None
         self.current_image_data: Optional[str] = None
         self.current_prompt: Optional[str] = None
 
@@ -48,7 +49,7 @@ def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], 
         return None, None, None
     
     # Get all latent embeddings
-    dataloader = torch.utils.data.DataLoader(session.dataset, batch_size=len(session.dataset), shuffle=False, num_workers=0)
+    dataloader = DataLoader(session.dataset, batch_size=len(session.dataset), shuffle=False, num_workers=0)
     
     for latents, _ in dataloader:
         latents = latents.to(device)
@@ -63,15 +64,15 @@ def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], 
         bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
         
         # Select image with maximum entropy
-        x_local = int(torch.argmax(bernoulli_entropy).item())
-        x_global = int(global_idxs[x_local].item())
+        local_idx = int(torch.argmax(bernoulli_entropy).item())
+        global_idx = int(global_idxs[local_idx].item())
         
         # Mark as shown
-        session.mask[x_global] = False
+        session.mask[global_idx] = False
         
         # Get image and prompt
-        image_tensor = session.dataset.get_image(x_global)
-        prompt = session.dataset.get_prompt(x_global)
+        image_tensor = session.dataset.get_image(global_idx)
+        prompt = session.dataset.get_prompt(global_idx)
         
         # Convert image to base64 for web display
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
@@ -84,7 +85,7 @@ def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], 
         
         os.unlink(temp_path)
         
-        return x_global, image_data, prompt
+        return global_idx, image_data, prompt
 
     return None, None, None
 
@@ -107,17 +108,17 @@ async def get_next_image_endpoint():
     if current_session is None:
         return {'error': 'No active session. Please start a session first.'}
     
-    image_id, image_data, prompt = get_next_image(current_session)
+    image_idx, image_data, prompt = get_next_image(current_session)
     
-    if image_id is None:
+    if image_idx is None:
         return {'error': 'No more images available'}
     
-    current_session.current_image_id = image_id
+    current_session.current_image_idx = image_idx
     current_session.current_image_data = image_data
     current_session.current_prompt = prompt
     
     return {
-        'image_id': image_id,
+        'image_idx': image_idx,
         'image_data': image_data,
         'prompt': prompt
     }
@@ -130,29 +131,20 @@ async def submit_feedback(feedback: FeedbackRequest):
     if current_session is None:
         return {'error': 'No active session'}
     
-    if feedback.image_id != current_session.current_image_id:
+    if feedback.image_idx != current_session.current_image_idx:
         return {'error': 'Image ID mismatch'}
     
     # Get the latent embedding for this image
-    dataloader = torch.utils.data.DataLoader(current_session.dataset, batch_size=len(current_session.dataset), shuffle=False, num_workers=0)
+    dataloader = DataLoader(current_session.dataset, batch_size=len(current_session.dataset), shuffle=False, num_workers=0)
     
     for latents, _ in dataloader:
         latents = latents.to(device)
-        global_idxs = torch.nonzero(current_session.mask, as_tuple=False).squeeze(-1)
         
-        # Find the local index for this global index
-        local_idx = None
-        for i, global_idx in enumerate(global_idxs):
-            if global_idx.item() == feedback.image_id:
-                local_idx = i
-                break
-        
-        if local_idx is not None:
-            latent_embedding = latents[local_idx]
-            current_session.distribution.update(latent_embedding, feedback.rating)
-            break
+        latent_embedding = latents[feedback.image_idx]
+        current_session.distribution.update(latent_embedding, feedback.rating)
+        break
     
-    return {'status': 'feedback_received'}
+    return {'status': f'feedback_received {current_session.distribution.counts}'}
 
 @app.get('/api/stats')
 async def get_stats():

@@ -1,6 +1,6 @@
 class TinderApp {
     constructor() {
-        this.currentImageId = null;
+        this.currentImageIdx = null;
         this.isDragging = false;
         this.startX = 0;
         this.startY = 0;
@@ -101,8 +101,8 @@ class TinderApp {
                 return;
             }
 
-            console.log('getNextImage: API success, image_id:', data.image_id);
-            this.currentImageId = data.image_id;
+            console.log('getNextImage: API success, image_idx:', data.image_id);
+            this.currentImageIdx = data.image_idx;
             this.cardPrompt.textContent = data.prompt;
 
             // Create a new image to test loading before setting the actual image
@@ -137,8 +137,8 @@ class TinderApp {
     }
 
     async handleLike() {
-        console.log('❤️ handleLike: Called, currentImageId:', this.currentImageId, 'sessionStarted:', this.sessionStarted);
-        if (this.currentImageId < 0 || !this.sessionStarted) {
+        console.log('❤️ handleLike: Called, currentImageIdx:', this.currentImageIdx, 'sessionStarted:', this.sessionStarted);
+        if (this.currentImageIdx < 0 || !this.sessionStarted) {
             console.log('❤️ handleLike: Early return - missing imageId or session not started');
             return;
         }
@@ -152,8 +152,8 @@ class TinderApp {
     }
 
     async handleDislike() {
-        console.log('❌ handleDislike: Called, currentImageId:', this.currentImageId, 'sessionStarted:', this.sessionStarted);
-        if (!this.currentImageId || !this.sessionStarted) {
+        console.log('❌ handleDislike: Called, currentImageIdx:', this.currentImageIdx, 'sessionStarted:', this.sessionStarted);
+        if (!this.currentImageIdx || !this.sessionStarted) {
             console.log('❌ handleDislike: Early return - missing imageId or session not started');
             return;
         }
@@ -167,7 +167,7 @@ class TinderApp {
     }
 
     async submitFeedback(rating) {
-        console.log('📤 submitFeedback: Submitting rating', rating, 'for image', this.currentImageId);
+        console.log('📤 submitFeedback: Submitting rating', rating, 'for image', this.currentImageIdx);
         try {
             const response = await fetch('/api/feedback', {
                 method: 'POST',
@@ -175,7 +175,7 @@ class TinderApp {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    image_id: this.currentImageId,
+                    image_idx: this.currentImageIdx,
                     rating: rating
                 })
             });
