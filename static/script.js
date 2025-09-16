@@ -28,6 +28,7 @@ class TinderApp {
         this.likesCount = document.getElementById('likes-count');
         this.dislikesCount = document.getElementById('dislikes-count');
         this.remainingCount = document.getElementById('remaining-count');
+        this.likeProbability = document.getElementById('like-probability');
     }
 
     bindEvents() {
@@ -101,9 +102,10 @@ class TinderApp {
                 return;
             }
 
-            console.log('getNextImage: API success, image_idx:', data.image_id);
+            console.log('getNextImage: API success, image_idx:', data.image_idx);
             this.currentImageIdx = data.image_idx;
             this.cardPrompt.textContent = data.prompt;
+            this.likeProbability.textContent = 'probability: ' + Math.ceil(data.probability * 1000) / 1000;
 
             // Create a new image to test loading before setting the actual image
             const testImage = new Image();

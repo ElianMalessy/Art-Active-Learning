@@ -43,10 +43,11 @@ class SessionData:
         self.current_image_idx: Optional[int] = None
         self.current_image_data: Optional[str] = None
         self.current_prompt: Optional[str] = None
+        self.current_probability: Optional[float] = None
 
-def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], Optional[str], Optional[float]]:
     if not session.mask.any():
-        return None, None, None
+        return None, None, None, None
     
     # Get all latent embeddings
     dataloader = DataLoader(session.dataset, batch_size=len(session.dataset), shuffle=False, num_workers=0)
@@ -85,9 +86,9 @@ def get_next_image(session: SessionData) -> Tuple[Optional[int], Optional[str], 
         
         os.unlink(temp_path)
         
-        return global_idx, image_data, prompt
+        return global_idx, image_data, prompt, p[local_idx].item()
 
-    return None, None, None
+    return None, None, None, None
 
 @app.get('/', response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -108,7 +109,7 @@ async def get_next_image_endpoint():
     if current_session is None:
         return {'error': 'No active session. Please start a session first.'}
     
-    image_idx, image_data, prompt = get_next_image(current_session)
+    image_idx, image_data, prompt, probability = get_next_image(current_session)
     
     if image_idx is None:
         return {'error': 'No more images available'}
@@ -116,11 +117,13 @@ async def get_next_image_endpoint():
     current_session.current_image_idx = image_idx
     current_session.current_image_data = image_data
     current_session.current_prompt = prompt
+    current_session.current_probability = probability
     
     return {
         'image_idx': image_idx,
         'image_data': image_data,
-        'prompt': prompt
+        'prompt': prompt,
+        'probability': probability
     }
 
 @app.post('/api/feedback')
@@ -144,7 +147,7 @@ async def submit_feedback(feedback: FeedbackRequest):
         current_session.distribution.update(latent_embedding, feedback.rating)
         break
     
-    return {'status': f'feedback_received {current_session.distribution.counts}'}
+    return {'status': f'feedback_received'}
 
 @app.get('/api/stats')
 async def get_stats():
