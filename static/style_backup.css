@@ -5,8 +5,11 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantar.prefer-btn:active {
+    transform: translateY(0);
+}
+
+/* Recommendations */  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     overflow-x: hidden;
 }
@@ -122,6 +125,8 @@ body {
     transition: transform 0.3s ease;
 }
 
+
+
 .card-info {
     padding: 20px;
     background: white;
@@ -165,6 +170,20 @@ body {
 
 .prefer-btn:active {
     transform: translateY(0);
+}
+
+.likelihood-display {
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+}
+
+.quality-score {
+    font-weight: bold;
+    color: #333;
 }
 
 .vs-divider {

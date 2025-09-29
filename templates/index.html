@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Art Tinder</title>
+    <title>Art Comparison - Bradley-Terry Learning</title>
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -12,53 +12,80 @@
 <body>
     <div class="app-container">
         <header class="header">
-            <h1>🎨 Art Tinder</h1>
+            <h1>🎨 Art Comparison</h1>
             <div class="stats" id="stats">
-                <span id="likes-count">0</span> ❤️ |
-                <span id="dislikes-count">0</span> ❌ |
-                <span id="remaining-count">0</span> remaining |
-                <span id="like-probability">probability: 0.0</span>
+                <span id="comparisons-count">0</span> comparisons |
+                <span id="remaining-count">0</span> remaining
             </div>
         </header>
 
-        <div class="card-container" id="card-container">
-            <div class="card" id="main-card">
-                <div class="card-content">
-                    <div class="image-container" id="image-container">
-                        <div class="loading" id="loading">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading next image...</p>
-                        </div>
-                        <img id="card-image" style="display: none;" alt="Artwork">
+        <div class="comparison-container" id="comparison-container">
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading comparison...</p>
+            </div>
+            
+            <div class="comparison-pair" id="comparison-pair" style="display: none;">
+                <div class="comparison-card" id="card-a" data-choice="a">
+                    <div class="card-header">
+                        <span class="card-label">Left Image</span>
                     </div>
-                    <div class="card-info">
-                        <h3 id="card-prompt">Prompt will appear here</h3>
+                    <div class="card-content">
+                        <div class="image-container">
+                            <img id="image-a" alt="Artwork A">
+                        </div>
+                        <div class="card-info">
+                            <h3 id="prompt-a">Prompt A</h3>
+                        </div>
+                    </div>
+                    <button class="prefer-btn" data-choice="a">
+                        <i class="fas fa-heart"></i>
+                        <span>I Prefer This</span>
+                    </button>
+                </div>
+
+                <div class="vs-divider">
+                    <div class="vs-content">
+                        <span>VS</span>
+                        <div class="probability-display" id="probability-display">
+                            <div class="prob-label">Model thinks:</div>
+                            <div class="prob-value" id="prob-value">--</div>
+                            <div class="prob-description" id="prob-description">vs right image</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="swipe-indicator like-indicator" id="like-indicator">
-                    <i class="fas fa-heart"></i>
-                    <span>LIKE</span>
-                </div>
-                <div class="swipe-indicator dislike-indicator" id="dislike-indicator">
-                    <i class="fas fa-times"></i>
-                    <span>NOPE</span>
+                <div class="comparison-card" id="card-b" data-choice="b">
+                    <div class="card-header">
+                        <span class="card-label">Right Image</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="image-container">
+                            <img id="image-b" alt="Artwork B">
+                        </div>
+                        <div class="card-info">
+                            <h3 id="prompt-b">Prompt B</h3>
+                        </div>
+                    </div>
+                    <button class="prefer-btn" data-choice="b">
+                        <i class="fas fa-heart"></i>
+                        <span>I Prefer This</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div class="action-buttons">
-            <button class="action-btn dislike-btn" id="dislike-btn">
-                <i class="fas fa-times"></i>
-            </button>
-            <button class="action-btn like-btn" id="like-btn">
-                <i class="fas fa-heart"></i>
-            </button>
+        <div class="recommendations-section" id="recommendations-section" style="display: none;">
+            <h2>Your Top Recommendations</h2>
+            <div class="recommendations-grid" id="recommendations-grid">
+                <!-- Recommendations will be loaded here -->
+            </div>
+            <button class="action-btn" id="continue-btn">Continue Comparing</button>
         </div>
 
         <div class="instructions">
-            <p><strong>Swipe right or click ❤️ to like</strong></p>
-            <p><strong>Swipe left or click ❌ to dislike</strong></p>
+            <p><strong>Compare the two artworks and click "I Prefer This" on your favorite</strong></p>
+            <p>The system learns your preferences and gets better at recommending art you'll love!</p>
         </div>
     </div>
 

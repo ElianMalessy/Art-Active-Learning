@@ -5,94 +5,111 @@ import os
 import tempfile
 from torchvision.utils import save_image
 
-from models.bayes import NormalBayes
+from models.bradley_terry import BradleyTerryModel
 from dataset.embeddings import EmbeddingDataset
 from utils import device
 
-def render_image_w3m(image_tensor):
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-        temp_path = tmp_file.name
+def render_images_side_by_side(image_tensor_a, image_tensor_b):
+    """Display two images side by side using w3m"""
+    with tempfile.NamedTemporaryFile(suffix='_a.png', delete=False) as tmp_file_a:
+        temp_path_a = tmp_file_a.name
+    with tempfile.NamedTemporaryFile(suffix='_b.png', delete=False) as tmp_file_b:
+        temp_path_b = tmp_file_b.name
     
-    save_image(image_tensor, temp_path)
-    subprocess.run(["w3m", temp_path])
-    os.unlink(temp_path)
+    save_image(image_tensor_a, temp_path_a)
+    save_image(image_tensor_b, temp_path_b)
+    
+    # Display both images
+    subprocess.run(["w3m", temp_path_a])
+    print("--- VS ---")
+    subprocess.run(["w3m", temp_path_b])
+    
+    os.unlink(temp_path_a)
+    os.unlink(temp_path_b)
 
 def test():
     dataset = EmbeddingDataset('latent_embeddings', return_metadata=True)
     dataloader = DataLoader(dataset, batch_size=len(dataset), shuffle=False, num_workers=4)
 
-    distribution = NormalBayes()
+    model = BradleyTerryModel(input_dim=64)
 
     mask = torch.ones(len(dataset), dtype=torch.bool).to(device)
-    print(f"Starting main loop with {mask.sum().item()} candidates")
+    print(f"Starting Bradley-Terry comparison learning with {mask.sum().item()} candidates")
+    
     iteration = 0
-    while mask.any():
+    while mask.sum() >= 2:  # Need at least 2 images for comparison
         iteration += 1
         
-        # p(y=1|x,mu,theta)
-        # y = 1 means the user likes the image
-        # y = 0 means the user dislikes the image
-        
-        
-        # Each batch is (embeddings, metadata). We only need the embeddings tensor.
+        # Get all latent embeddings
         for latents, _ in dataloader:
             latents = latents.to(device)
             global_idxs = torch.nonzero(mask, as_tuple=False).squeeze(-1)
             candidates = latents[global_idxs]
 
-            logp = distribution.log_likelihood(candidates, y=1)
-            p = torch.exp(logp).clamp(1e-6, 1 - 1e-6)
-            print('p stats:')
-            print('min:', p.min().item())
-            print('max:', p.max().item())
+            if len(candidates) < 2:
+                print("Not enough candidates remaining for comparison")
+                break
+
+            # Select most informative pair using Bradley-Terry model
+            local_idx_a, local_idx_b = model.select_most_informative_pair(candidates)
             
-            if iteration <= 10:
-                # max entropy sampling for first 10 images
-                bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
-
-                print('min entropy:', bernoulli_entropy.min().item())
-                print('max entropy:', bernoulli_entropy.max().item())
-                print('sum entropy:', bernoulli_entropy.sum().item())
-
-                x_local = int(torch.argmax(bernoulli_entropy).item())
+            if local_idx_a is None or local_idx_b is None:
+                print("Could not find a good pair to compare")
+                break
                 
-                ties = (torch.where(bernoulli_entropy == bernoulli_entropy.max())[0]).tolist()
-                print('ties:', len(ties))
-            else:
-                # 85% chance of maximum likelihood, 15% chance of max entropy
-                if torch.rand(1).item() < 0.85:
-                    # maximum likelihood sampling
-                    x_local = int(torch.argmax(p).item())
-                    print('Using maximum likelihood sampling')
-                else:
-                    # max entropy sampling
-                    bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
-                    x_local = int(torch.argmax(bernoulli_entropy).item())
-                    print('Using max entropy sampling')
-                    
-            x_global = int(global_idxs[x_local].item())
+            global_idx_a = int(global_idxs[local_idx_a].item())
+            global_idx_b = int(global_idxs[local_idx_b].item())
             
-            print('argmax:', x_global)
-            mask[x_global] = False
+            # Remove both from consideration
+            mask[global_idx_a] = False
+            mask[global_idx_b] = False
 
-            image_tensor = dataset.get_image(x_global)
-            prompt = dataset.get_prompt(x_global)
+            # Get images and prompts
+            image_tensor_a = dataset.get_image(global_idx_a)
+            image_tensor_b = dataset.get_image(global_idx_b)
+            prompt_a = dataset.get_prompt(global_idx_a)
+            prompt_b = dataset.get_prompt(global_idx_b)
             
-            print(f'Prompt: {prompt}')
-            render_image_w3m(image_tensor)
+            print(f"\n=== Comparison {iteration} ===")
+            print(f'IMAGE A: {prompt_a}')
+            print(f'IMAGE B: {prompt_b}')
+            
+            render_images_side_by_side(image_tensor_a, image_tensor_b)
 
-            y = input('Do you like this image? (0/1 or "exit" to quit): ')
-            if y == 'exit':
+            choice = input('Which do you prefer? (a/b or "exit" to quit): ').lower().strip()
+            if choice == 'exit':
                 return
-            if y != '0' and y != '1':
-                print('Please enter 0 or 1')
+            if choice not in ['a', 'b']:
+                print('Please enter "a" or "b"')
                 continue
 
-            y = int(y)
-
-            # Update distribution with the latent embedding (not the image)
-            latent_embedding = latents[x_local]
-            distribution.update(latent_embedding, y)
+            # Update Bradley-Terry model with comparison result
+            embedding_a = latents[local_idx_a]
+            embedding_b = latents[local_idx_b]
+            a_wins = (choice == 'a')
+            
+            loss = model.update(embedding_a, embedding_b, a_wins)
+            print(f'Model updated. Training loss: {loss:.4f}')
+            print(f'Total comparisons made: {model.comparisons_seen}')
+            
+            # Show current quality predictions for these images
+            with torch.no_grad():
+                quality_a = model.quality_score(embedding_a).item()
+                quality_b = model.quality_score(embedding_b).item()
+                print(f'Quality scores: A={quality_a:.3f}, B={quality_b:.3f}')
+            
+            # Every 5 comparisons, show top recommendations
+            if iteration % 5 == 0:
+                print(f"\n🎯 TOP 5 RECOMMENDATIONS after {iteration} comparisons:")
+                all_embeddings = latents
+                top_indices, top_scores = model.get_top_recommendations(all_embeddings)
+                
+                for rank, (idx, score) in enumerate(zip(top_indices, top_scores), 1):
+                    prompt = dataset.get_prompt(idx)
+                    print(f"{rank}. [{score:.3f}] {prompt[:80]}...")
+                print()
+            
+            break  # Break the dataloader loop and continue to next iteration
 
             
 if __name__ == '__main__':

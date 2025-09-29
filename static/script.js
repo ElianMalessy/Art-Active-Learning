@@ -1,13 +1,8 @@
-class TinderApp {
+class ArtComparisonApp {
     constructor() {
-        this.currentImageIdx = null;
-        this.isDragging = false;
-        this.startX = 0;
-        this.startY = 0;
-        this.currentX = 0;
-        this.currentY = 0;
-        this.threshold = 100;
+        this.currentPairId = null;
         this.sessionStarted = false;
+        this.comparisonsCount = 0;
 
         this.initializeElements();
         this.bindEvents();
@@ -15,191 +10,202 @@ class TinderApp {
     }
 
     initializeElements() {
-        this.card = document.getElementById('main-card');
-        this.imageContainer = document.getElementById('image-container');
-        this.cardImage = document.getElementById('card-image');
-        this.cardPrompt = document.getElementById('card-prompt');
         this.loading = document.getElementById('loading');
-        this.likeBtn = document.getElementById('like-btn');
-        this.dislikeBtn = document.getElementById('dislike-btn');
-        this.likeIndicator = document.getElementById('like-indicator');
-        this.dislikeIndicator = document.getElementById('dislike-indicator');
-
-        this.likesCount = document.getElementById('likes-count');
-        this.dislikesCount = document.getElementById('dislikes-count');
-        this.remainingCount = document.getElementById('remaining-count');
-        this.likeProbability = document.getElementById('like-probability');
+        this.comparisonPair = document.getElementById('comparison-pair');
+        this.imageA = document.getElementById('image-a');
+        this.imageB = document.getElementById('image-b');
+        this.promptA = document.getElementById('prompt-a');
+        this.promptB = document.getElementById('prompt-b');
+        this.preferBtns = document.querySelectorAll('.prefer-btn');
+        
+        // Probability display elements
+        this.probValue = document.getElementById('prob-value');
+        this.probDescription = document.getElementById('prob-description');
+        
+        // Stats elements
+        this.comparisonsCountEl = document.getElementById('comparisons-count');
+        this.remainingCountEl = document.getElementById('remaining-count');
+        
+        // Recommendations elements
+        this.recommendationsSection = document.getElementById('recommendations-section');
+        this.recommendationsGrid = document.getElementById('recommendations-grid');
+        this.continueBtn = document.getElementById('continue-btn');
     }
 
     bindEvents() {
-        // Button events
-        this.likeBtn.addEventListener('click', () => this.handleLike());
-        this.dislikeBtn.addEventListener('click', () => this.handleDislike());
-
-        // Add keyboard shortcut for testing
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 't' || e.key === 'T') {
-                console.log('🔧 Manual test triggered with T key');
-                this.getNextImage();
-            }
+        // Preference button events
+        this.preferBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent card click event
+                const choice = e.currentTarget.dataset.choice;
+                this.handlePreference(choice);
+            });
         });
 
-        // Touch events for mobile
-        this.card.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.card.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.card.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        // Make entire cards clickable
+        document.getElementById('card-a').addEventListener('click', () => {
+            this.handlePreference('a');
+        });
+        
+        document.getElementById('card-b').addEventListener('click', () => {
+            this.handlePreference('b');
+        });
 
-        // Mouse events for desktop
-        this.card.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.card.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.card.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-        this.card.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
+        // Continue button event
+        this.continueBtn.addEventListener('click', () => {
+            this.hideRecommendations();
+            this.getNextComparison();
+        });
 
-        // Prevent context menu on long press
-        this.card.addEventListener('contextmenu', (e) => e.preventDefault());
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A') {
+                this.handlePreference('a');
+            } else if (e.key === 'b' || e.key === 'B') {
+                this.handlePreference('b');
+            } else if (e.key === 'r' || e.key === 'R') {
+                this.showRecommendations();
+            }
+        });
     }
 
     async autoStartSession() {
-        console.log('🚀 autoStartSession: Starting automatically...');
+        console.log('🚀 Starting new art comparison session...');
         try {
-            console.log('🚀 autoStartSession: Fetching /api/start...');
             const response = await fetch('/api/start', { method: 'POST' });
-            console.log('🚀 autoStartSession: Response received:', response.status);
             const data = await response.json();
-            console.log('🚀 autoStartSession: Data received:', data);
-
+            
             if (data.status === 'started') {
-                console.log('🚀 autoStartSession: Session started successfully!');
                 this.sessionStarted = true;
-                console.log('🚀 autoStartSession: About to call getNextImage()...');
-                await this.getNextImage();
-                console.log('🚀 autoStartSession: getNextImage() completed, updating stats...');
+                console.log('✅ Session started successfully');
+                await this.getNextComparison();
                 await this.updateStats();
-                console.log('🚀 autoStartSession: All done!');
             } else {
-                console.log('🚀 autoStartSession: Unexpected response:', data);
+                throw new Error('Failed to start session');
             }
         } catch (error) {
-            console.log('🚀 autoStartSession: Error caught:', error);
-            this.showMessage('Failed to start session', 'error');
-            console.error('Error starting session:', error);
+            console.error('❌ Error starting session:', error);
+            this.showError('Failed to start session. Please refresh the page.');
         }
     }
 
-    async getNextImage() {
-        console.log('getNextImage: Starting...');
-        this.showLoading(true);
+    async getNextComparison() {
+        if (!this.sessionStarted) {
+            console.log('⚠️ No active session');
+            return;
+        }
 
+        this.showLoading();
+        
         try {
-            console.log('getNextImage: Fetching from API...');
-            const response = await fetch('/api/next-image');
+            console.log('🔍 Fetching next comparison...');
+            const response = await fetch('/api/next-comparison');
             const data = await response.json();
-
+            
             if (data.error) {
-                console.log('getNextImage: API returned error:', data.error);
-                this.showMessage(data.error, 'error');
-                this.showLoading(false);
-                return;
+                if (data.error.includes('Not enough images')) {
+                    this.showRecommendations();
+                } else {
+                    throw new Error(data.error);
+                }
+            } else {
+                this.displayComparison(data);
             }
-
-            console.log('getNextImage: API success, image_idx:', data.image_idx);
-            this.currentImageIdx = data.image_idx;
-            this.cardPrompt.textContent = data.prompt;
-            this.likeProbability.textContent = 'probability: ' + Math.ceil(data.probability * 1000) / 1000;
-
-            // Create a new image to test loading before setting the actual image
-            const testImage = new Image();
-
-            testImage.onload = () => {
-                console.log('getNextImage: Test image loaded successfully');
-                // Image loaded successfully, now set it to the actual image element
-                this.cardImage.src = testImage.src;
-                this.showLoading(false);
-                this.resetCardPosition();
-                console.log('getNextImage: Image displayed, loading hidden');
-            };
-
-            testImage.onerror = () => {
-                console.log('getNextImage: Test image failed to load');
-                this.showMessage('Failed to load image', 'error');
-                this.showLoading(false);
-                console.error('Error loading image');
-            };
-
-            // Start loading the test image
-            console.log('getNextImage: Starting image load...');
-            testImage.src = `data:image/png;base64,${data.image_data}`;
-
         } catch (error) {
-            console.log('getNextImage: Exception caught:', error);
-            this.showMessage('Failed to load image', 'error');
-            this.showLoading(false);
-            console.error('Error loading image:', error);
+            console.error('❌ Error fetching comparison:', error);
+            this.showError('Failed to load comparison. Please try again.');
         }
     }
 
-    async handleLike() {
-        console.log('❤️ handleLike: Called, currentImageIdx:', this.currentImageIdx, 'sessionStarted:', this.sessionStarted);
-        if (this.currentImageIdx < 0 || !this.sessionStarted) {
-            console.log('❤️ handleLike: Early return - missing imageId or session not started');
+    displayComparison(data) {
+        this.currentPairId = data.pair_id;
+        
+        // Set images
+        this.imageA.src = `data:image/png;base64,${data.image_a}`;
+        this.imageB.src = `data:image/png;base64,${data.image_b}`;
+        
+        // Set prompts
+        this.promptA.textContent = data.prompt_a;
+        this.promptB.textContent = data.prompt_b;
+        
+        // Set probability display
+        const probPercent = (data.prob_a_beats_b * 100).toFixed(1);
+        this.probValue.textContent = `${probPercent}%`;
+        this.probDescription.textContent = `left wins vs right`;
+        
+        this.hideLoading();
+        
+        console.log('🖼️ Displaying comparison:', {
+            pairId: data.pair_id,
+            promptA: data.prompt_a.substring(0, 50) + '...',
+            promptB: data.prompt_b.substring(0, 50) + '...',
+            probABeatsB: data.prob_a_beats_b
+        });
+    }
+
+    async handlePreference(choice) {
+        if (!this.currentPairId) {
+            console.log('⚠️ No active comparison');
             return;
         }
 
-        console.log('❤️ handleLike: Submitting feedback...');
-        console.log('❤️ handleLike: Feedback submitted, animating card...');
-        this.animateCard('right');
-        this.showLoading(true);
-        this.cardPrompt.textContent = 'Prompt will appear here'
-        await this.submitFeedback(1);
-    }
+        // Visual feedback - highlight selected card
+        const selectedCard = document.getElementById(`card-${choice}`);
+        const otherCard = document.getElementById(choice === 'a' ? 'card-b' : 'card-a');
+        
+        selectedCard.classList.add('selected');
+        otherCard.style.opacity = '0.5';
 
-    async handleDislike() {
-        console.log('❌ handleDislike: Called, currentImageIdx:', this.currentImageIdx, 'sessionStarted:', this.sessionStarted);
-        if (!this.currentImageIdx || !this.sessionStarted) {
-            console.log('❌ handleDislike: Early return - missing imageId or session not started');
-            return;
-        }
-
-        console.log('❌ handleDislike: Submitting feedback...');
-        console.log('❌ handleDislike: Feedback submitted, animating card...');
-        this.animateCard('left');
-        this.showLoading(true);
-        this.cardPrompt.textContent = 'Prompt will appear here'
-        await this.submitFeedback(0);
-    }
-
-    async submitFeedback(rating) {
-        console.log('📤 submitFeedback: Submitting rating', rating, 'for image', this.currentImageIdx);
         try {
-            const response = await fetch('/api/feedback', {
+            console.log(`💖 User preferred ${choice.toUpperCase()}`);
+            
+            const response = await fetch('/api/comparison-feedback', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    image_idx: this.currentImageIdx,
-                    rating: rating
+                    pair_id: this.currentPairId,
+                    preferred: choice
                 })
             });
-
-            console.log('📤 submitFeedback: Response received:', response.status);
+            
             const data = await response.json();
-            console.log('📤 submitFeedback: Data received:', data);
-
+            
             if (data.error) {
-                console.log('📤 submitFeedback: Error in response:', data.error);
-                this.showMessage(data.error, 'error');
-                return;
+                throw new Error(data.error);
+            } else {
+                console.log('✅ Feedback submitted successfully', {
+                    comparisons: data.comparisons_made,
+                    loss: data.training_loss
+                });
+                
+                this.comparisonsCount = data.comparisons_made;
+                await this.updateStats();
+                
+                // Reset visual states
+                setTimeout(() => {
+                    selectedCard.classList.remove('selected');
+                    otherCard.style.opacity = '1';
+                }, 500);
+                
+                // Show recommendations after every 5 comparisons
+                if (this.comparisonsCount % 5 === 0 && this.comparisonsCount > 0) {
+                    this.showRecommendations();
+                } else {
+                    // Get next comparison
+                    setTimeout(() => {
+                        this.getNextComparison();
+                    }, 1000);
+                }
             }
-
-            console.log('📤 submitFeedback: Updating stats...');
-            await this.updateStats();
-            console.log('📤 submitFeedback: Stats updated successfully');
-
         } catch (error) {
-            console.log('📤 submitFeedback: Exception caught:', error);
-            this.showMessage('Failed to submit feedback', 'error');
-            console.error('Error submitting feedback:', error);
+            console.error('❌ Error submitting feedback:', error);
+            this.showError('Failed to submit preference. Please try again.');
+            
+            // Reset visual states on error
+            selectedCard.classList.remove('selected');
+            otherCard.style.opacity = '1';
         }
     }
 
@@ -207,168 +213,96 @@ class TinderApp {
         try {
             const response = await fetch('/api/stats');
             const data = await response.json();
+            
+            if (!data.error) {
+                this.comparisonsCountEl.textContent = data.comparisons_made || 0;
+                this.remainingCountEl.textContent = data.remaining_images || 0;
+            }
+        } catch (error) {
+            console.error('❌ Error updating stats:', error);
+        }
+    }
 
+    async showRecommendations() {
+        try {
+            console.log('🎯 Fetching recommendations...');
+            const response = await fetch('/api/recommendations?k=10');
+            const data = await response.json();
+            
             if (data.error) {
+                console.log('⚠️ Cannot show recommendations:', data.error);
+                this.getNextComparison();
                 return;
             }
-
-            this.likesCount.textContent = data.likes;
-            this.dislikesCount.textContent = data.dislikes;
-            this.remainingCount.textContent = data.remaining_images;
-
+            
+            this.displayRecommendations(data.recommendations);
         } catch (error) {
-            console.error('Error updating stats:', error);
+            console.error('❌ Error fetching recommendations:', error);
         }
     }
 
-    // Touch event handlers
-    handleTouchStart(e) {
-        e.preventDefault();
-        this.isDragging = true;
-        this.startX = e.touches[0].clientX;
-        this.startY = e.touches[0].clientY;
-        this.card.classList.add('touching');
+    displayRecommendations(recommendations) {
+        this.recommendationsGrid.innerHTML = '';
+        
+        recommendations.forEach((rec, index) => {
+            const card = document.createElement('div');
+            card.className = 'recommendation-card';
+            card.innerHTML = `
+                <div class="rank">${rec.rank}</div>
+                <div class="quality-score">${rec.quality_score.toFixed(2)}</div>
+                <div class="image-container">
+                    <img src="data:image/png;base64,${rec.image_data}" alt="Recommended artwork">
+                </div>
+                <div class="card-info">
+                    <h3>${rec.prompt}</h3>
+                </div>
+            `;
+            this.recommendationsGrid.appendChild(card);
+        });
+        
+        this.comparisonPair.style.display = 'none';
+        this.loading.style.display = 'none';
+        this.recommendationsSection.style.display = 'block';
+        
+        console.log('🎯 Showing recommendations:', recommendations.length);
     }
 
-    handleTouchMove(e) {
-        if (!this.isDragging) return;
-        e.preventDefault();
-
-        this.currentX = e.touches[0].clientX;
-        this.currentY = e.touches[0].clientY;
-
-        const deltaX = this.currentX - this.startX;
-        const deltaY = this.currentY - this.startY;
-
-        this.updateCardPosition(deltaX, deltaY);
-        this.updateSwipeIndicators(deltaX);
+    hideRecommendations() {
+        this.recommendationsSection.style.display = 'none';
     }
 
-    handleTouchEnd(e) {
-        if (!this.isDragging) return;
-        e.preventDefault();
-
-        this.isDragging = false;
-        this.card.classList.remove('touching');
-
-        const deltaX = this.currentX - this.startX;
-        this.handleSwipeEnd(deltaX);
+    showLoading() {
+        this.loading.style.display = 'block';
+        this.comparisonPair.style.display = 'none';
     }
 
-    // Mouse event handlers
-    handleMouseDown(e) {
-        e.preventDefault();
-        this.isDragging = true;
-        this.startX = e.clientX;
-        this.startY = e.clientY;
-        this.card.classList.add('touching');
+    hideLoading() {
+        this.loading.style.display = 'none';
+        this.comparisonPair.style.display = 'flex';
     }
 
-    handleMouseMove(e) {
-        if (!this.isDragging) return;
-        e.preventDefault();
-
-        this.currentX = e.clientX;
-        this.currentY = e.clientY;
-
-        const deltaX = this.currentX - this.startX;
-        const deltaY = this.currentY - this.startY;
-
-        this.updateCardPosition(deltaX, deltaY);
-        this.updateSwipeIndicators(deltaX);
-    }
-
-    handleMouseUp(e) {
-        if (!this.isDragging) return;
-        e.preventDefault();
-
-        this.isDragging = false;
-        this.card.classList.remove('touching');
-
-        const deltaX = this.currentX - this.startX;
-        this.handleSwipeEnd(deltaX);
-    }
-
-    updateCardPosition(deltaX, deltaY) {
-        const rotation = deltaX * 0.1;
-        this.card.style.transform = `translate(${deltaX}px, ${deltaY}px) rotate(${rotation}deg)`;
-    }
-
-    updateSwipeIndicators(deltaX) {
-        if (deltaX > this.threshold) {
-            this.likeIndicator.classList.add('show');
-            this.dislikeIndicator.classList.remove('show');
-        } else if (deltaX < -this.threshold) {
-            this.dislikeIndicator.classList.add('show');
-            this.likeIndicator.classList.remove('show');
-        } else {
-            this.likeIndicator.classList.remove('show');
-            this.dislikeIndicator.classList.remove('show');
-        }
-    }
-
-    handleSwipeEnd(deltaX) {
-        if (deltaX > this.threshold) {
-            this.handleLike();
-        } else if (deltaX < -this.threshold) {
-            this.handleDislike();
-        } else {
-            this.resetCardPosition();
-        }
-    }
-
-    animateCard(direction) {
-        console.log('🎬 animateCard: Starting animation for direction:', direction);
-        const animationClass = direction === 'right' ? 'slide-out-right' : 'slide-out-left';
-        console.log('🎬 animateCard: Adding class:', animationClass);
-        this.card.classList.add(animationClass);
-
-        setTimeout(async () => {
-            console.log('🎬 animateCard: Animation timeout completed, removing class and getting next image');
-            this.card.classList.remove(animationClass);
-            this.resetCardPosition();
-            console.log('🎯 animateCard: Getting next image after', direction, 'swipe');
-            await this.getNextImage();
-        }, 300);
-    }
-
-    resetCardPosition() {
-        this.card.style.transform = '';
-        this.likeIndicator.classList.remove('show');
-        this.dislikeIndicator.classList.remove('show');
-    }
-
-    showLoading(show) {
-        this.loading.style.display = show ? 'flex' : 'none';
-        this.cardImage.style.display = show ? 'none' : 'block';
-    }
-
-    showMessage(text, type) {
-        // Remove existing messages
-        const existingMessage = document.querySelector('.message');
-        if (existingMessage) {
-            existingMessage.remove();
-        }
-
-        const message = document.createElement('div');
-        message.className = `message ${type}`;
-        message.textContent = text;
-        document.body.appendChild(message);
-
-        // Show message
-        setTimeout(() => message.classList.add('show'), 100);
-
-        // Hide message after 3 seconds
-        setTimeout(() => {
-            message.classList.remove('show');
-            setTimeout(() => message.remove(), 300);
-        }, 3000);
+    showError(message) {
+        console.error('💥 Error:', message);
+        this.loading.innerHTML = `
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>${message}</p>
+        `;
+        this.loading.style.display = 'block';
+        this.comparisonPair.style.display = 'none';
     }
 }
 
-// Initialize the app when the page loads
+// Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 TinderApp initializing...');
-    new TinderApp();
-    console.log('✅ TinderApp initialized successfully!');
+    console.log('🎨 Art Comparison App initializing...');
+    new ArtComparisonApp();
+});
+
+// Global error handling
+window.addEventListener('error', (e) => {
+    console.error('💥 Global error:', e.error);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+    console.error('💥 Unhandled promise rejection:', e.reason);
 });
