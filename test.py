@@ -25,10 +25,11 @@ def test():
 
     mask = torch.ones(len(dataset), dtype=torch.bool).to(device)
     print(f"Starting main loop with {mask.sum().item()} candidates")
+    iteration = 0
     while mask.any():
-        # max entropy sampling
+        iteration += 1
+        
         # p(y=1|x,mu,theta)
-
         # y = 1 means the user likes the image
         # y = 0 means the user dislikes the image
         
@@ -45,19 +46,33 @@ def test():
             print('min:', p.min().item())
             print('max:', p.max().item())
             
-            bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
+            if iteration <= 10:
+                # max entropy sampling for first 10 images
+                bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
 
-            print('min entropy:', bernoulli_entropy.min().item())
-            print('max entropy:', bernoulli_entropy.max().item())
-            print('sum entropy:', bernoulli_entropy.sum().item())
+                print('min entropy:', bernoulli_entropy.min().item())
+                print('max entropy:', bernoulli_entropy.max().item())
+                print('sum entropy:', bernoulli_entropy.sum().item())
 
-            x_local = int(torch.argmax(bernoulli_entropy).item())
+                x_local = int(torch.argmax(bernoulli_entropy).item())
+                
+                ties = (torch.where(bernoulli_entropy == bernoulli_entropy.max())[0]).tolist()
+                print('ties:', len(ties))
+            else:
+                # 85% chance of maximum likelihood, 15% chance of max entropy
+                if torch.rand(1).item() < 0.85:
+                    # maximum likelihood sampling
+                    x_local = int(torch.argmax(p).item())
+                    print('Using maximum likelihood sampling')
+                else:
+                    # max entropy sampling
+                    bernoulli_entropy = -p*torch.log(p) - (1-p)*torch.log(1-p)
+                    x_local = int(torch.argmax(bernoulli_entropy).item())
+                    print('Using max entropy sampling')
+                    
             x_global = int(global_idxs[x_local].item())
-
-            ties = (torch.where(bernoulli_entropy == bernoulli_entropy.max())[0]).tolist()
             
             print('argmax:', x_global)
-            print('ties:', len(ties))
             mask[x_global] = False
 
             image_tensor = dataset.get_image(x_global)
